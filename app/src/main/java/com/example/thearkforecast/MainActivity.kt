@@ -2,8 +2,10 @@ package com.example.thearkforecast
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
@@ -26,11 +30,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +57,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.ActivityNavigatorExtras
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.thearkforecast.ui.theme.Blue
 import com.example.thearkforecast.ui.theme.DarkBlue
 import com.example.thearkforecast.ui.theme.TheArkForecastTheme
@@ -59,20 +71,97 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            WeatherScreen()
+            TheArkForecastTheme {
+                MainScreen()
+            }
+        }
+    }
+}
+
+sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
+    object Home : Screen("home", "Weather", Icons.Default.Home)
+    object History: Screen("history", "History", Icons.Default.DateRange)
+}
+
+@Composable
+fun MainScreen() {
+    val navController = rememberNavController()
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color.White,
+                contentColor = DarkBlue
+            ) {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+
+                val items = listOf(Screen.Home, Screen.History)
+
+                items.forEach { screen ->
+                    NavigationBarItem(
+                        icon = { Icon(screen.icon, contentDescription = screen.label) },
+                        label = { Text(screen.label) },
+                        selected = currentRoute == screen.route,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.Home.route) {
+                WeatherScreen()
+            }
+            composable(Screen.History.route) {
+                HistoryScreen()
+            }
         }
     }
 }
 
 @Composable
+fun HistoryScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("History Screen - Coming Soon", fontSize = 20.sp, color = DarkBlue)
+    }
+}
+
+
+@Composable
 fun WeatherScreen() {
     val viewModel: WeatherViewModel = viewModel()
     val weatherData by viewModel.weatherData.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var city by remember {
         mutableStateOf("")
     }
-    var apiKey by remember {
-        mutableStateOf(Constants.apiKey)
+    val apiKey = Constants.apiKey
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.values.all { it }
+        if (granted) {
+            viewModel.fetchWeatherByLocation(apiKey)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        locationPermissionLauncher.launch(
+            arrayOf(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
     }
 
     Box(
@@ -92,7 +181,7 @@ fun WeatherScreen() {
         ) {
             Spacer(
                 modifier = Modifier
-                    .height(180.dp)
+                    .height(90.dp)
             )
             OutlinedTextField(
                 value = city,
@@ -123,24 +212,47 @@ fun WeatherScreen() {
                 modifier = Modifier
                     .height(16.dp)
             )
-            weatherData?.let {
-                Row(
+            if (isLoading) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                        .fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    WeatherCard(label = city, value = it.name, icon = Icons.Default.Place)
-                    WeatherCard(label = "Temperature", value = "${it.main.temp}°C", icon = Icons.Default.Star)
+                    androidx.compose.material3.CircularProgressIndicator(color = Color.White)
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    WeatherCard(label = "Humidity", value = "${it.main.humidity}%", icon = Icons.Default.Warning)
-                    WeatherCard(label = "Description", value = it.weather[0].description, icon = Icons.Default.Info)
+            } else {
+                weatherData?.let {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        WeatherCard(label = "City", value = it.name, icon = Icons.Default.Place)
+                        WeatherCard(
+                            label = "Temperature",
+                            value = "${it.main.temp}°C",
+                            icon = Icons.Default.Star
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        WeatherCard(
+                            label = "Humidity",
+                            value = "${it.main.humidity}%",
+                            icon = Icons.Default.Warning
+                        )
+                        WeatherCard(
+                            label = "Description",
+                            value = it.weather[0].description,
+                            icon = Icons.Default.Info
+                        )
+                    }
                 }
             }
+
         }
     }
 }
