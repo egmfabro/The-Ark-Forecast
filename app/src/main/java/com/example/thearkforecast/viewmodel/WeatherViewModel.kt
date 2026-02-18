@@ -1,44 +1,58 @@
-package com.example.thearkforecast
+package com.example.thearkforecast.viewmodel
 
 import android.annotation.SuppressLint
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.thearkforecast.data.WeatherApi
+import com.example.thearkforecast.data.AppDataBase
+import com.example.thearkforecast.data.WeatherHistory
+import com.example.thearkforecast.data.WeatherResponse
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class WeatherViewModel(application: Application) : AndroidViewModel(application) {
     private val _weatherData = MutableStateFlow<WeatherResponse?>(null)
     val weatherData: StateFlow<WeatherResponse?> = _weatherData
-    private val weatherApi = WeatherApi.create()
+    private val weatherApi = WeatherApi.Companion.create()
     private val fusedLocationClient =
-        com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(application)
+        LocationServices.getFusedLocationProviderClient(application)
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
-    private val db = AppDataBase.getDatabase(application)
+    private val db = AppDataBase.Companion.getDatabase(application)
     private val weatherDao = db.weatherDao()
     val historyList: StateFlow<List<WeatherHistory>> = weatherDao.getAllHistory()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Companion.WhileSubscribed(5000), emptyList())
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage
 
-    fun clearError() { _errorMessage.value = null }
+    fun clearError() {
+        _errorMessage.value = null
+    }
 
     fun saveSearchToHistory(response: WeatherResponse) {
-        val timestamp = java.text.SimpleDateFormat("MMM dd, hh:mm a", java.util.Locale.getDefault())
-            .format(java.util.Date())
+        val timestamp = SimpleDateFormat("MMM dd, hh:mm a", Locale.getDefault())
+            .format(Date())
 
         viewModelScope.launch {
             weatherDao.insert(
                 WeatherHistory(
                     cityName = response.name,
+                    country = response.sys.country,
                     temperature = "${response.main.temp.toInt()}°C",
                     description = response.weather[0].description,
+                    sunrise = formatTime(response.sys.sunrise, response.timezone),
+                    sunset = formatTime(response.sys.sunset, response.timezone),
                     dateTime = timestamp
                 )
             )
@@ -58,11 +72,16 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 val response = weatherApi.getWeather(city, apiKey)
                 _weatherData.value = response
                 saveSearchToHistory(response)
-            } catch (e: java.io.IOException) {
-                _errorMessage.value =
-                    "You are not connected to the internet. Please check your connection and try again."
+            } catch (e: retrofit2.HttpException) {
+                if (e.code() == 404) {
+                    _errorMessage.value = "City not found. Try searching for the parent city (e.g., Pasig or Mandaluyong)."
+                } else {
+                    _errorMessage.value = "Server error: ${e.message()}"
+                }
+            } catch (e: IOException) {
+                _errorMessage.value = "Check your internet connection."
             } catch (e: Exception) {
-                _errorMessage.value = "An error occurred: ${e.localizedMessage}"
+                _errorMessage.value = "An unexpected error occurred."
             } finally {
                 _isLoading.value = false
             }
@@ -72,8 +91,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     @SuppressLint("MissingPermission")
     fun fetchWeatherByLocation(apiKey: String) {
         _isLoading.value = true
-        // 1. Use Priority.PRIORITY_HIGH_ACCURACY to force a fresh reading
-        val priority = com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
+        val priority = Priority.PRIORITY_HIGH_ACCURACY
 
         fusedLocationClient.getCurrentLocation(priority, null)
             .addOnSuccessListener { location ->
@@ -86,8 +104,9 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                                 apiKey
                             )
                             _weatherData.value = response
-                        } catch (e: java.io.IOException) {
-                            _errorMessage.value = "You are not connected to the internet. Please check your connection and try again."
+                        } catch (e: IOException) {
+                            _errorMessage.value =
+                                "You are not connected to the internet. Please check your connection and try again."
                         } catch (e: Exception) {
                             _errorMessage.value = "An error occurred: ${e.localizedMessage}"
                         } finally {
@@ -95,12 +114,27 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 } else {
-                    // If it's still null, Ortigas it is!
                     fetchWeather("Ortigas", apiKey)
                 }
             }
             .addOnFailureListener {
                 _isLoading.value = false
             }
+    }
+
+    fun formatTime(timestamp: Long, timezoneOffset: Int): String {
+        val date = Date(timestamp * 1000L)
+        val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+        val tz = java.util.TimeZone.getTimeZone("UTC")
+        val offsetInMillis = timezoneOffset * 1000
+
+        sdf.timeZone = java.util.SimpleTimeZone(offsetInMillis, "CustomCityTime")
+        return sdf.format(date)
+    }
+
+    fun isNightTime(): Boolean {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return hour >= 18 || hour < 6
     }
 }

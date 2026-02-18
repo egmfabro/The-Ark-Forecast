@@ -1,8 +1,9 @@
-package com.example.thearkforecast
+package com.example.thearkforecast.data
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import com.example.thearkforecast.data.WeatherHistory
 import kotlinx.coroutines.flow.Flow
 
 @Dao

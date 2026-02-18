@@ -1,12 +1,14 @@
-package com.example.thearkforecast
+package com.example.thearkforecast.data
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.thearkforecast.data.WeatherDao
+import com.example.thearkforecast.data.WeatherHistory
 
-@Database(entities = [WeatherHistory::class], version = 1)
-abstract class AppDataBase : RoomDatabase(){
+@Database(entities = [WeatherHistory::class], version = 2)
+abstract class AppDataBase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
 
     companion object {
