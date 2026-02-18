@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -25,11 +27,13 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
@@ -86,6 +90,8 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
+    val sharedViewModel: WeatherViewModel = viewModel()
+
 
     Scaffold(
         bottomBar = {
@@ -120,31 +126,66 @@ fun MainScreen() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Home.route) {
-                WeatherScreen()
+                WeatherScreen(sharedViewModel)
             }
             composable(Screen.History.route) {
-                HistoryScreen()
+                HistoryScreen(sharedViewModel)
             }
         }
     }
 }
 
 @Composable
-fun HistoryScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("History Screen - Coming Soon", fontSize = 20.sp, color = DarkBlue)
+fun HistoryScreen(viewModel: WeatherViewModel) {
+    val historyItems by viewModel.historyList.collectAsState()
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Text(
+                "Search History",
+                style = MaterialTheme.typography.headlineMedium
+            )
+        }
+        items(historyItems) { history ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = history.cityName,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = "${history.temperature} - ${history.description}"
+                    )
+                    Text(
+                        text = history.dateTime,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
     }
 }
 
 
 @Composable
-fun WeatherScreen() {
-    val viewModel: WeatherViewModel = viewModel()
+fun WeatherScreen(viewModel: WeatherViewModel) {
     val weatherData by viewModel.weatherData.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var city by remember {
         mutableStateOf("")
     }
+    val errorMessage by viewModel.errorMessage.collectAsState()
     val apiKey = Constants.apiKey
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -154,6 +195,20 @@ fun WeatherScreen() {
             viewModel.fetchWeatherByLocation(apiKey)
         }
     }
+
+    if (errorMessage != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.clearError() },
+            title = { Text("Connection Error") },
+            text = { Text(errorMessage!!)},
+            confirmButton = {
+                Button(onClick = { viewModel.clearError() }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
 
     LaunchedEffect(Unit) {
         locationPermissionLauncher.launch(
@@ -310,13 +365,5 @@ fun WeatherCard(label: String, value: String, icon: ImageVector) {
                 )
             }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun WeatherPreview() {
-    TheArkForecastTheme {
-        WeatherScreen()
     }
 }
