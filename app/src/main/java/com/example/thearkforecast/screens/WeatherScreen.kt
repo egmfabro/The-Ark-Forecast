@@ -45,6 +45,8 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
         val granted = permissions.values.all { it }
         if (granted) {
             viewModel.fetchWeatherByLocation(apiKey)
+        } else {
+            viewModel.fetchWeather("Pasig", apiKey)
         }
     }
 
