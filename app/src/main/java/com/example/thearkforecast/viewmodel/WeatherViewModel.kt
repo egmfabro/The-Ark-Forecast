@@ -45,17 +45,23 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             .format(Date())
 
         viewModelScope.launch {
-            weatherDao.insert(
-                WeatherHistory(
-                    cityName = response.name,
-                    country = response.sys.country,
-                    temperature = "${response.main.temp.toInt()}°C",
-                    description = response.weather[0].description,
-                    sunrise = formatTime(response.sys.sunrise, response.timezone),
-                    sunset = formatTime(response.sys.sunset, response.timezone),
-                    dateTime = timestamp
+            try {
+                weatherDao.insert(
+                    WeatherHistory(
+                        // Use Elvis operator ?: to provide "Unknown" fallbacks
+                        cityName = response.name ?: "Unknown City",
+                        country = response.sys?.country ?: "??",
+                        temperature = "${response.main?.temp?.toInt() ?: 0}°C",
+                        description = response.weather?.firstOrNull()?.description ?: "No description",
+                        sunrise = formatTime(response.sys?.sunrise ?: 0L, response.timezone),
+                        sunset = formatTime(response.sys?.sunset ?: 0L, response.timezone),
+                        dateTime = timestamp
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                // This prevents the app from crashing even if the DB insert fails
+                _errorMessage.value = "Failed to save to history."
+            }
         }
     }
 
@@ -73,6 +79,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 _weatherData.value = response
                 saveSearchToHistory(response)
             } catch (e: retrofit2.HttpException) {
+                _weatherData.value = null
                 if (e.code() == 404) {
                     _errorMessage.value = "City not found. Try searching for the parent city (e.g., Pasig or Mandaluyong)."
                 } else {

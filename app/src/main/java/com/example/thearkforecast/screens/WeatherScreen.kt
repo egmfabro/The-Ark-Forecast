@@ -33,6 +33,7 @@ import com.example.thearkforecast.data.Constants
 @Composable
 fun WeatherScreen(viewModel: WeatherViewModel) {
     val weatherData by viewModel.weatherData.collectAsState()
+    val weatherDataValue = weatherData
     val isLoading by viewModel.isLoading.collectAsState()
     var city by remember { mutableStateOf("") }
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -48,11 +49,11 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
     }
 
     // Logic for Dynamic Background and Icons
-    val weatherMain = weatherData?.weather?.firstOrNull()?.main ?: ""
+    val weatherMain = weatherDataValue?.weather?.firstOrNull()?.main ?: ""
     val currentTime = System.currentTimeMillis() / 1000
-    val sunrise = weatherData?.sys?.sunrise ?: 0
-    val sunset = weatherData?.sys?.sunset ?: 0
-    val isNight = if (sunrise != 0L && sunset != 0L) {
+    val sunrise = weatherDataValue?.sys?.sunrise ?: 0
+    val sunset = weatherDataValue?.sys?.sunset ?: 0
+    val isNight = if (weatherDataValue!= null && sunrise != 0L && sunset != 0L) {
         currentTime < sunrise || currentTime > sunset
     } else {
         viewModel.isNightTime()
@@ -60,6 +61,7 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
     val backgroundResource = if (isNight) R.drawable.weather_night else R.drawable.weather_day
     // Determine which custom drawable to use
     val weatherIconRes = when {
+        weatherDataValue == null -> Icons.Default.CloudOff
         // 1. Any hint of rain takes priority
         weatherMain.contains("Rain", ignoreCase = true) -> R.drawable.icon_weather_rainy
 
@@ -180,6 +182,8 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
                 }
             } else {
                 weatherData?.let { data ->
+                    val sunriseTime = viewModel.formatTime(data.sys.sunrise, data.timezone)
+                    val sunsetTime = viewModel.formatTime(data.sys.sunset, data.timezone)
                     // City and Country Header
                     Column(
                         modifier = Modifier
@@ -188,7 +192,7 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
                         horizontalAlignment = Alignment.Start
                     ) {
                         Text(
-                            text = "${data.name}, ${data.sys.country}",
+                            text = if (data.sys.country.isNullOrEmpty()) data.name else "${data.name}, ${data.sys.country}",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.9f)
@@ -201,8 +205,9 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
                             letterSpacing = (-10).sp,
                             modifier = Modifier.offset(y = (-10).dp)
                         )
+                        val description = data.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: ""
                         Text(
-                            text = data.weather[0].description.replaceFirstChar { it.uppercase() },
+                            text = description,
                             fontSize = 16.sp,
                             color = Color.White.copy(alpha = 0.8f),
                             modifier = Modifier.offset(y = (-20).dp)
@@ -241,13 +246,13 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
                         ) {
                             WeatherCard(
                                 label = "Sunrise",
-                                value = viewModel.formatTime(data.sys.sunrise,data.timezone),
+                                value = sunriseTime,
                                 icon = Icons.Default.WbTwilight,
                                 isNight = isNight
                             )
                             WeatherCard(
                                 label = "Sunset",
-                                value = viewModel.formatTime(data.sys.sunset, data.timezone),
+                                value = sunsetTime,
                                 icon = R.drawable.icon_sunset,
                                 isNight = isNight
                             )
