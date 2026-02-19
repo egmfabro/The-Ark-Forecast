@@ -48,7 +48,6 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             try {
                 weatherDao.insert(
                     WeatherHistory(
-                        // Use Elvis operator ?: to provide "Unknown" fallbacks
                         cityName = response.name ?: "Unknown City",
                         country = response.sys?.country ?: "??",
                         temperature = "${response.main?.temp?.toInt() ?: 0}°C",
@@ -59,7 +58,6 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                     )
                 )
             } catch (e: Exception) {
-                // This prevents the app from crashing even if the DB insert fails
                 _errorMessage.value = "Failed to save to history."
             }
         }
@@ -121,7 +119,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 } else {
-                    fetchWeather("Ortigas", apiKey)
+                    fetchWeather("Pasig", apiKey)
                 }
             }
             .addOnFailureListener {

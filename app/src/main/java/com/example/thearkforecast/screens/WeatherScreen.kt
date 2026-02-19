@@ -50,7 +50,6 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
         }
     }
 
-    // Logic for Dynamic Background and Icons
     val weatherMain = weatherDataValue?.weather?.firstOrNull()?.main ?: ""
     val currentTime = System.currentTimeMillis() / 1000
     val sunrise = weatherDataValue?.sys?.sunrise ?: 0
@@ -61,28 +60,23 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
         viewModel.isNightTime()
     }
     val backgroundResource = if (isNight) R.drawable.weather_night else R.drawable.weather_day
-    // Determine which custom drawable to use
     val weatherIconRes = when {
         weatherDataValue == null -> Icons.Default.CloudOff
-        // 1. Any hint of rain takes priority
         weatherMain.contains("Rain", ignoreCase = true) -> R.drawable.icon_weather_rainy
 
-        // 2. Night Time Logic
         isNight -> {
             if (weatherMain.contains("Cloud", ignoreCase = true)) {
-                R.drawable.icon_weather_night_cloudy // Custom Night Cloudy
+                R.drawable.icon_weather_night_cloudy
             } else {
-                // Your default Clear Night icon (e.g., a moon)
                 Icons.Default.WbTwilight
             }
         }
 
-        // 3. Day Time Logic
         else -> {
             if (weatherMain.contains("Cloud", ignoreCase = true)) {
-                R.drawable.icon_weather_sunny_cloudy // Custom Sunny Cloudy
+                R.drawable.icon_weather_sunny_cloudy
             } else {
-                // Your default Clear Sunny icon (e.g., a sun)
+
                 Icons.Default.WbSunny
             }
         }
