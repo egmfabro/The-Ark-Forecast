@@ -114,7 +114,7 @@ fun WeatherScreen(viewModel: WeatherViewModel) {
             .fillMaxSize()
             .paint(
                 painterResource(backgroundResource),
-                contentScale = ContentScale.FillBounds
+                contentScale = ContentScale.Crop
             )
     ) {
         Column(
